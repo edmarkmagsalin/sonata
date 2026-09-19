@@ -25,79 +25,107 @@ import {
 import { Button } from "@workspace/ui/components/button"
 import sonataLogo from "./logo.svg"
 
-const initialTracks = [
-  { name: "Lead vocal", format: "WAV", active: true },
-  { name: "Harmony layer", format: "MP3", active: true },
-  { name: "Acoustic guitar", format: "M4A", active: false },
-]
+import { useSonataStore } from "../lib/store"
 
-const lyrics = [
-  { time: "00:08", text: "I found a quiet place to start again", active: false },
-  {
-    time: "00:14",
-    text: "Where every note can find its way back home",
-    active: true,
-  },
-  {
-    time: "00:21",
-    text: "The room is still, but something is changing",
-    active: false,
-  },
-  { time: "00:28", text: "A little louder than the day before", active: false },
-  {
-    time: "00:35",
-    text: "And I can hear the shape of what comes next",
-    active: false,
-  },
-]
+const defaultLyricMetadata = {
+  title: "Untitled",
+  artist: "Unknown artist",
+  album: "Unknown album",
+}
 
-type LyricMetadata = {
-  title: string
-  artist: string
-  album: string
+const formatTime = (seconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds))
+  const minutes = Math.floor(safeSeconds / 60)
+  const remainingSeconds = safeSeconds % 60
+
+  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+    .toString()
+    .padStart(2, "0")}`
+}
+
+const parseLyrics = (content: string | null) => {
+  const metadata = { ...defaultLyricMetadata }
+  const lines: { time: string; text: string; active: boolean }[] = []
+
+  if (!content) return { metadata, lines }
+
+  for (const line of content.split(/\r?\n/)) {
+    const metadataMatch = line.match(/^\[(ti|ar|al):([^\]]*)\]\s*$/i)
+    const lyricMatch = line.match(/^\[(\d{1,2}):(\d{2})(?:\.\d{1,3})?\](.*)$/)
+
+    if (metadataMatch) {
+      const tag = metadataMatch[1]?.toLowerCase()
+      const value = metadataMatch[2]?.trim()
+
+      if (tag === "ti" && value) metadata.title = value
+      if (tag === "ar" && value) metadata.artist = value
+      if (tag === "al" && value) metadata.album = value
+    }
+
+    if (lyricMatch) {
+      lines.push({
+        time: `${lyricMatch[1]?.padStart(2, "0")}:${lyricMatch[2]}`,
+        text: lyricMatch[3]?.trim() ?? "",
+        active: lines.length === 0,
+      })
+    }
+  }
+
+  return { metadata, lines }
 }
 
 export default function Page() {
-  const [playing, setPlaying] = useState(false)
+  const {
+    isPlaying,
+    currentTime,
+    duration,
+    tracks,
+    lyricFile,
+    lyricContent,
+    togglePlay,
+    addAudioFiles,
+    toggleMute,
+    toggleSolo,
+    removeTrack,
+    setLyricFile,
+    removeLyricFile,
+  } = useSonataStore()
   const [repeating, setRepeating] = useState(false)
-  const [lyricsUploaded, setLyricsUploaded] = useState(false)
-  const [lyricMetadata, setLyricMetadata] = useState<LyricMetadata>({
-    title: "Untitled",
-    artist: "Unknown artist",
-    album: "Unknown album",
-  })
-  const [mutedTracks, setMutedTracks] = useState<string[]>([])
-  const [soloTracks, setSoloTracks] = useState<string[]>([])
-  const [tracks, setTracks] = useState(initialTracks)
   const [openTrackMenu, setOpenTrackMenu] = useState<string | null>(null)
+  const [openLyricMenu, setOpenLyricMenu] = useState(false)
   const lyricsInputRef = useRef<HTMLInputElement>(null)
+  const audioInputRef = useRef<HTMLInputElement>(null)
   const trackMenuRef = useRef<HTMLDivElement>(null)
+  const lyricMenuRef = useRef<HTMLDivElement>(null)
+  const { metadata: lyricMetadata, lines: lyrics } = parseLyrics(lyricContent)
+  const progress = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0
 
   useEffect(() => {
-    if (!openTrackMenu) return
+    if (!openTrackMenu && !openLyricMenu) return
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!trackMenuRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node
+
+      if (!trackMenuRef.current?.contains(target)) {
         setOpenTrackMenu(null)
+      }
+
+      if (!lyricMenuRef.current?.contains(target)) {
+        setOpenLyricMenu(false)
       }
     }
 
     document.addEventListener("pointerdown", handlePointerDown)
 
     return () => document.removeEventListener("pointerdown", handlePointerDown)
-  }, [openTrackMenu])
+  }, [openTrackMenu, openLyricMenu])
 
-  const removeTrack = (trackName: string) => {
-    setTracks((currentTracks) =>
-      currentTracks.filter((track) => track.name !== trackName)
-    )
-    setMutedTracks((currentTracks) =>
-      currentTracks.filter((currentTrack) => currentTrack !== trackName)
-    )
-    setSoloTracks((currentTracks) =>
-      currentTracks.filter((currentTrack) => currentTrack !== trackName)
-    )
-    setOpenTrackMenu(null)
+  const handleAudioUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+
+    if (files.length > 0) addAudioFiles(files)
+
+    event.target.value = ""
   }
 
   const handleLyricsUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -106,25 +134,7 @@ export default function Page() {
     if (!file) return
 
     const content = await file.text()
-    const metadata = { ...lyricMetadata }
-
-    for (const line of content.split(/\r?\n/)) {
-      const match = line.match(/^\[(ti|ar|al):([^\]]*)\]\s*$/i)
-
-      if (!match) continue
-
-      const tag = match[1]
-      const value = match[2]
-
-      if (!tag || value === undefined) continue
-
-      if (tag.toLowerCase() === "ti") metadata.title = value.trim()
-      if (tag.toLowerCase() === "ar") metadata.artist = value.trim()
-      if (tag.toLowerCase() === "al") metadata.album = value.trim()
-    }
-
-    setLyricMetadata(metadata)
-    setLyricsUploaded(true)
+    setLyricFile(file, content)
     event.target.value = ""
   }
 
@@ -158,107 +168,91 @@ export default function Page() {
               <div className="space-y-3 p-4">
                 {tracks.map((track) => (
                   <div
-                    key={track.name}
+                    key={track.id}
                     className="group relative rounded-xl border border-border bg-card p-2.5"
                   >
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                      <FileAudio className="size-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {track.name}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {track.format} · 04:32
-                      </p>
-                    </div>
-                    <div
-                      ref={trackMenuRef}
-                      className="relative"
-                      onPointerDown={(event) => event.stopPropagation()}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`More options for ${track.name}`}
-                        aria-expanded={openTrackMenu === track.name}
-                        onPointerDown={() =>
-                          setOpenTrackMenu((currentTrack) =>
-                            currentTrack === track.name ? null : track.name
-                          )
-                        }
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <FileAudio className="size-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {track.name}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {track.file.name.split(".").pop()?.toUpperCase()} · 04:32
+                        </p>
+                      </div>
+                      <div
+                        ref={trackMenuRef}
+                        className="relative"
+                        onPointerDown={(event) => event.stopPropagation()}
                       >
-                        <MoreHorizontal />
-                      </Button>
-                      {openTrackMenu === track.name && (
-                        <div className="absolute top-10 right-0 z-10 min-w-36 rounded-lg border border-border bg-background p-1 shadow-lg">
-                          <button
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-muted"
-                            onClick={() => setOpenTrackMenu(null)}
-                          >
-                            <Pencil className="size-3.5" />
-                            Rename track
-                          </button>
-                          <button
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-muted"
-                            onClick={() => setOpenTrackMenu(null)}
-                          >
-                            <RefreshCw className="size-3.5" />
-                            Replace track
-                          </button>
-                          <div className="my-1 border-t border-border" />
-                          <button
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
-                            onClick={() => removeTrack(track.name)}
-                          >
-                            <Trash2 className="size-3.5" />
-                            Remove track
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-2.5 flex items-center gap-2 border-t border-border pt-2">
-                    <button
-                      className={`rounded-md px-2 py-1 text-[10px] font-bold tracking-[0.12em] ${mutedTracks.includes(track.name) ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                      aria-pressed={mutedTracks.includes(track.name)}
-                      onClick={() =>
-                        setMutedTracks((currentTracks) =>
-                          currentTracks.includes(track.name)
-                            ? currentTracks.filter(
-                                (currentTrack) => currentTrack !== track.name
-                              )
-                            : [...currentTracks, track.name]
-                        )
-                      }
-                    >
-                      MUTE
-                    </button>
-                    <button
-                      className={`rounded-md px-2 py-1 text-[10px] font-bold tracking-[0.12em] ${soloTracks.includes(track.name) ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                      aria-pressed={soloTracks.includes(track.name)}
-                      onClick={() =>
-                        setSoloTracks((currentTracks) =>
-                          currentTracks.includes(track.name)
-                            ? currentTracks.filter(
-                                (currentTrack) => currentTrack !== track.name
-                              )
-                            : [...currentTracks, track.name]
-                        )
-                      }
-                    >
-                      SOLO
-                    </button>
-                    <div className="ml-auto flex items-center gap-2 text-muted-foreground">
-                      <Volume2 className="size-3.5" />
-                      <div className="h-1 w-16 rounded-full bg-muted">
-                        <div
-                          className={`h-1 rounded-full bg-primary ${track.active ? "w-4/5" : "w-1/2"}`}
-                        />
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`More options for ${track.name}`}
+                          aria-expanded={openTrackMenu === track.id}
+                          onPointerDown={() =>
+                            setOpenTrackMenu(
+                              openTrackMenu === track.id ? null : track.id
+                            )
+                          }
+                        >
+                          <MoreHorizontal />
+                        </Button>
+                        {openTrackMenu === track.id && (
+                          <div className="absolute top-10 right-0 z-10 min-w-36 rounded-lg border border-border bg-background p-1 shadow-lg">
+                            <button
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-muted"
+                              onClick={() => setOpenTrackMenu(null)}
+                            >
+                              <Pencil className="size-3.5" />
+                              Rename track
+                            </button>
+                            <button
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-muted"
+                              onClick={() => setOpenTrackMenu(null)}
+                            >
+                              <RefreshCw className="size-3.5" />
+                              Replace track
+                            </button>
+                            <div className="my-1 border-t border-border" />
+                            <button
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
+                              onClick={() => removeTrack(track.id)}
+                            >
+                              <Trash2 className="size-3.5" />
+                              Remove track
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
+                    <div className="mt-2.5 flex items-center gap-2 border-t border-border pt-2">
+                      <button
+                        className={`rounded-md px-2 py-1 text-[10px] font-bold tracking-[0.12em] ${track.muted ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                        aria-pressed={track.muted}
+                        onClick={() => toggleMute(track.id)}
+                      >
+                        MUTE
+                      </button>
+                      <button
+                        className={`rounded-md px-2 py-1 text-[10px] font-bold tracking-[0.12em] ${track.soloed ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                        aria-pressed={track.soloed}
+                        onClick={() => toggleSolo(track.id)}
+                      >
+                        SOLO
+                      </button>
+                      <div className="ml-auto flex items-center gap-2 text-muted-foreground">
+                        <Volume2 className="size-3.5" />
+                        <div className="h-1 w-16 rounded-full bg-muted">
+                          <div
+                            className={`h-1 rounded-full bg-primary ${track.volume > 0.5 ? "w-4/5" : "w-1/2"}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -274,14 +268,25 @@ export default function Page() {
               </div>
             )}
           </div>
-          <button className="mt-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-foreground">
+          <button
+            className="mt-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-foreground"
+            onClick={() => audioInputRef.current?.click()}
+          >
             <Plus className="size-4" /> Add track
           </button>
+          <input
+            ref={audioInputRef}
+            className="sr-only"
+            type="file"
+            accept=".wav,.mp3,.m4a,audio/wav,audio/mpeg,audio/mp4"
+            multiple
+            onChange={handleAudioUpload}
+          />
         </aside>
 
         <section className="order-first min-w-0 px-5 py-5 sm:px-8 sm:py-7 lg:order-0">
           <div className="mx-auto max-w-2xl">
-            {lyricsUploaded ? (
+            {lyricFile ? (
               <div className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-5 sm:px-8 sm:py-7 lg:sticky lg:top-24">
                 <div className="absolute top-0 left-0 h-1 w-[42%] bg-primary" />
                 <div className="mb-5 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
@@ -295,26 +300,49 @@ export default function Page() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span>02:14 / 04:32</span>
-                    <Button
-                      variant="destructive"
-                      size="icon-xs"
-                      aria-label="Remove uploaded lyrics"
-                      title="Remove uploaded lyrics"
-                      onClick={() => {
-                        setLyricsUploaded(false)
-                        setLyricMetadata({
-                          title: "Untitled",
-                          artist: "Unknown artist",
-                          album: "Unknown album",
-                        })
-                      }}
+                    <div
+                      ref={lyricMenuRef}
+                      className="relative"
+                      onPointerDown={(event) => event.stopPropagation()}
                     >
-                      <Trash2 />
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="More lyric options"
+                        aria-expanded={openLyricMenu}
+                        onPointerDown={() => setOpenLyricMenu((open) => !open)}
+                      >
+                        <MoreHorizontal />
+                      </Button>
+                      {openLyricMenu && (
+                        <div className="absolute top-8 right-0 z-10 min-w-40 rounded-lg border border-border bg-background p-1 shadow-lg">
+                          <button
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-muted"
+                            onClick={() => {
+                              setOpenLyricMenu(false)
+                              lyricsInputRef.current?.click()
+                            }}
+                          >
+                            <RefreshCw className="size-3.5" />
+                            Replace lyrics
+                          </button>
+                          <div className="my-1 border-t border-border" />
+                          <button
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              setOpenLyricMenu(false)
+                              removeLyricFile()
+                            }}
+                          >
+                            <Trash2 className="size-3.5" />
+                            Remove lyric
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="max-h-[40svh] space-y-4 overflow-y-auto pr-2 scrollbar-track-transparent hover:scrollbar-thumb-white/5 lg:max-h-[calc(100vh-24rem)]">
+                <div className="max-h-[40svh] space-y-4 overflow-y-auto pr-2 scrollbar-track-transparent hover:scrollbar-thumb-white/5 lg:max-h-[calc(100vh-25rem)]">
                   {lyrics.map((line) => (
                     <div
                       key={line.time}
@@ -396,10 +424,10 @@ export default function Page() {
             <Button
               variant="default"
               size="icon-lg"
-              aria-label={playing ? "Pause" : "Play"}
-              onClick={() => setPlaying(!playing)}
+              aria-label={isPlaying ? "Pause" : "Play"}
+              onClick={togglePlay}
             >
-              {playing ? <Pause /> : <Play />}
+              {isPlaying ? <Pause /> : <Play />}
             </Button>
             <Button variant="ghost" size="icon-sm" aria-label="Next track" title="Next track">
               <SkipForward />
@@ -411,20 +439,23 @@ export default function Page() {
               title="Repeat"
               aria-pressed={repeating}
               className={repeating ? "text-primary" : undefined}
-              onClick={() => setRepeating(!repeating)}
+              onClick={() => setRepeating((current) => !current)}
             >
               <Repeat />
             </Button>
           </div>
           <div className="flex items-center gap-3">
             <span className="font-mono text-[11px] text-muted-foreground">
-              02:14
+              {formatTime(currentTime)}
             </span>
             <div className="h-1 flex-1 rounded-full bg-muted">
-              <div className="h-1 w-[42%] rounded-full bg-primary" />
+              <div
+                className="h-1 rounded-full bg-primary"
+                style={{ width: `${progress}%` }}
+              />
             </div>
             <span className="font-mono text-[11px] text-muted-foreground">
-              04:32
+              {formatTime(duration)}
             </span>
           </div>
         </div>
