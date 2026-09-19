@@ -412,7 +412,6 @@ export default function Page() {
     void Promise.all(audioElements.map((audio) => audio.play()))
   }
 
-  console.log({visualizerBars})
   return (
     <main className="min-h-svh bg-background text-foreground selection:bg-accent">
       <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-5 backdrop-blur sm:px-8">
@@ -717,9 +716,6 @@ export default function Page() {
       <footer className="sticky bottom-0 border-t border-border bg-background/95 px-5 py-3 backdrop-blur sm:px-8">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           <div className="flex items-center justify-center gap-4 sm:gap-8">
-            <Button variant="ghost" size="icon-sm" aria-label="Volume" title="Volume">
-              <Volume2 />
-            </Button>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -743,6 +739,7 @@ export default function Page() {
               variant="default"
               size="icon-lg"
               aria-label={isPlaying ? "Pause" : "Play"}
+              disabled={tracks.length === 0}
               onClick={togglePlay}
             >
               {isPlaying ? <Pause /> : <Play />}
