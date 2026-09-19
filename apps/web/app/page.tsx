@@ -114,6 +114,7 @@ export default function Page() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const sourceNodesRef = useRef(new Map<string, MediaElementAudioSourceNode>())
+  const gainNodesRef = useRef(new Map<string, GainNode>())
   const visualizerFrameRef = useRef<number | null>(null)
   const activeLyricRef = useRef<HTMLDivElement | null>(null)
   const repeatingRef = useRef(repeating)
@@ -148,13 +149,16 @@ export default function Page() {
   useEffect(() => {
     const audioElements = audioElementsRef.current
     const sourceNodes = sourceNodesRef.current
+    const gainNodes = gainNodesRef.current
     const currentTrackIds = new Set(tracks.map((track) => track.id))
 
     for (const [trackId, audio] of audioElements) {
       if (!currentTrackIds.has(trackId)) {
         audio.pause()
         sourceNodes.get(trackId)?.disconnect()
+        gainNodes.get(trackId)?.disconnect()
         sourceNodes.delete(trackId)
+        gainNodes.delete(trackId)
         URL.revokeObjectURL(audio.src)
         audioElements.delete(trackId)
       }
@@ -177,8 +181,12 @@ export default function Page() {
         analyserRef.current = analyser
       }
 
-      sourceNodes.set(track.id, audioContext.createMediaElementSource(audio))
-      sourceNodes.get(track.id)?.connect(analyser)
+      const sourceNode = audioContext.createMediaElementSource(audio)
+      const gainNode = audioContext.createGain()
+      sourceNode.connect(gainNode)
+      gainNode.connect(analyser)
+      sourceNodes.set(track.id, sourceNode)
+      gainNodes.set(track.id, gainNode)
       if (currentTimeRef.current > 0) {
         audio.currentTime = currentTimeRef.current
       }
@@ -232,6 +240,7 @@ export default function Page() {
   useEffect(() => {
     const audioElements = audioElementsRef.current
     const sourceNodes = sourceNodesRef.current
+    const gainNodes = gainNodesRef.current
 
     return () => {
       for (const audio of audioElements.values()) {
@@ -241,10 +250,14 @@ export default function Page() {
       for (const source of sourceNodes.values()) {
         source.disconnect()
       }
+      for (const gain of gainNodes.values()) {
+        gain.disconnect()
+      }
       analyserRef.current?.disconnect()
       void audioContextRef.current?.close()
       audioElements.clear()
       sourceNodes.clear()
+      gainNodes.clear()
     }
   }, [])
 
@@ -294,13 +307,15 @@ export default function Page() {
 
   useEffect(() => {
     const audioElements = audioElementsRef.current
+    const gainNodes = gainNodesRef.current
     const hasSoloedTrack = tracks.some((track) => track.soloed)
 
     tracks.forEach((track) => {
       const audio = audioElements.get(track.id)
-      if (!audio) return
+      const gainNode = gainNodes.get(track.id)
+      if (!audio || !gainNode) return
 
-      audio.volume =
+      gainNode.gain.value =
         track.muted || (hasSoloedTrack && !track.soloed)
           ? 0
           : track.volume * masterVolume
@@ -566,7 +581,7 @@ export default function Page() {
             ref={audioInputRef}
             className="sr-only"
             type="file"
-            accept=".wav,.mp3,.m4a,audio/wav,audio/mpeg,audio/mp4"
+            accept=".wav,.mp3,.m4a"
             multiple
             onChange={handleAudioUpload}
           />
@@ -705,7 +720,7 @@ export default function Page() {
                   onChange={handleLyricsUpload}
                 />
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  Supported format: .lrc
+                  Supported format: .txt and .lrc
                 </p>
               </div>
             )}
