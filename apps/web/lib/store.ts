@@ -41,7 +41,7 @@ interface SonataStore {
   removeLyricFile: () => void
 }
 
-const MAX_FREE_TRACKS = 3
+const MAX_FREE_TRACKS = 5
 
 export const useSonataStore = create<SonataStore>((set, get) => ({
   // Initial States
