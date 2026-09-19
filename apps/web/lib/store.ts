@@ -23,6 +23,7 @@ interface SonataStore {
 
   // Playback Actions
   togglePlay: () => void
+  setIsPlaying: (isPlaying: boolean) => void
   setCurrentTime: (time: number) => void
   setDuration: (duration: number) => void
   setMasterVolume: (volume: number) => void
@@ -30,6 +31,7 @@ interface SonataStore {
   // Audio Track Actions (Max 3 on Free Tier)
   addAudioFiles: (files: File[]) => void
   removeTrack: (id: string) => void
+  removeAllTracks: () => void
   toggleMute: (id: string) => void
   toggleSolo: (id: string) => void
   setTrackVolume: (id: string, volume: number) => void
@@ -53,6 +55,7 @@ export const useSonataStore = create<SonataStore>((set, get) => ({
 
   // Playback Controls
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
+  setIsPlaying: (isPlaying) => set({ isPlaying }),
   setCurrentTime: (currentTime) => set({ currentTime }),
   setDuration: (duration) => set({ duration }),
   setMasterVolume: (masterVolume) => set({ masterVolume }),
@@ -84,6 +87,8 @@ export const useSonataStore = create<SonataStore>((set, get) => ({
     set((state) => ({
       tracks: state.tracks.filter((t) => t.id !== id),
     })),
+
+  removeAllTracks: () => set({ tracks: [] }),
 
   toggleMute: (id) =>
     set((state) => ({
