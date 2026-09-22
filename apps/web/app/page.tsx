@@ -1,6 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from "react"
 import Image from "next/image"
 import {
   Info,
@@ -108,8 +114,12 @@ export default function Page() {
   const [visualizerBars, setVisualizerBars] = useState(createFlatVisualizerBars)
   const [openTrackMenu, setOpenTrackMenu] = useState<string | null>(null)
   const [openLyricMenu, setOpenLyricMenu] = useState(false)
+  const [isDraggingAudio, setIsDraggingAudio] = useState(false)
+  const [isDraggingLyrics, setIsDraggingLyrics] = useState(false)
   const lyricsInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
+  const audioDragDepthRef = useRef(0)
+  const lyricDragDepthRef = useRef(0)
   const audioElementsRef = useRef(new Map<string, HTMLAudioElement>())
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -388,14 +398,74 @@ export default function Page() {
     event.target.value = ""
   }
 
-  const handleLyricsUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+  const handleAudioDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    audioDragDepthRef.current += 1
+    setIsDraggingAudio(true)
+  }
 
+  const handleAudioDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+  }
+
+  const handleAudioDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    audioDragDepthRef.current -= 1
+
+    if (audioDragDepthRef.current === 0) setIsDraggingAudio(false)
+  }
+
+  const handleAudioDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    audioDragDepthRef.current = 0
+    setIsDraggingAudio(false)
+
+    const files = Array.from(event.dataTransfer.files)
+    if (files.length > 0) addAudioFiles(files)
+  }
+
+  const uploadLyricFile = async (file: File | undefined) => {
     if (!file) return
 
     const content = await file.text()
     setLyricFile(file, content)
+  }
+
+  const handleLyricsUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    await uploadLyricFile(event.target.files?.[0])
     event.target.value = ""
+  }
+
+  const handleLyricsDragEnter = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    lyricDragDepthRef.current += 1
+    setIsDraggingLyrics(true)
+  }
+
+  const handleLyricsDragOver = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "copy"
+  }
+
+  const handleLyricsDragLeave = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    lyricDragDepthRef.current -= 1
+
+    if (lyricDragDepthRef.current === 0) setIsDraggingLyrics(false)
+  }
+
+  const handleLyricsDrop = async (event: DragEvent<HTMLElement>) => {
+    event.preventDefault()
+    lyricDragDepthRef.current = 0
+    setIsDraggingLyrics(false)
+
+    const lyricFile = Array.from(event.dataTransfer.files).find((file) => {
+      const extension = file.name.split(".").pop()?.toLowerCase()
+      return extension === "lrc" || extension === "txt"
+    })
+
+    await uploadLyricFile(lyricFile)
   }
 
   const handleSkip = (seconds: number) => {
@@ -452,7 +522,13 @@ export default function Page() {
 
       <div className="mx-auto grid max-w-370 grid-cols-1 gap-0 pt-16 lg:grid-cols-[360px_1fr]">
         <aside className="order-last border-b border-border p-5 sm:p-6 lg:order-0 lg:sticky lg:top-16 lg:flex lg:h-[calc(100vh-9rem)] lg:flex-col lg:overflow-hidden lg:border-r lg:border-b-0">
-          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1 scrollbar-track-transparent hover:scrollbar-thumb-white/5">
+          <div
+            className={`lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1 scrollbar-track-transparent hover:scrollbar-thumb-white/5 ${isDraggingAudio ? "rounded-xl bg-primary/5 ring-1 ring-primary" : ""}`}
+            onDragEnter={handleAudioDragEnter}
+            onDragOver={handleAudioDragOver}
+            onDragLeave={handleAudioDragLeave}
+            onDrop={handleAudioDrop}
+          >
             {tracks.length > 0 ? (
               <div className="space-y-3 p-4">
                 {tracks.map((track) => (
@@ -604,7 +680,13 @@ export default function Page() {
           )}
         </aside>
 
-        <section className="order-first min-w-0 px-5 py-5 sm:px-8 sm:py-7 lg:order-0">
+        <section
+          className={`order-first min-w-0 px-5 py-5 sm:px-8 sm:py-7 lg:order-0 ${isDraggingLyrics ? "bg-primary/5" : ""}`}
+          onDragEnter={handleLyricsDragEnter}
+          onDragOver={handleLyricsDragOver}
+          onDragLeave={handleLyricsDragLeave}
+          onDrop={handleLyricsDrop}
+        >
           <div className="mx-auto max-w-2xl">
             {lyricFile ? (
               <div className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-5 sm:px-8 sm:py-7 lg:sticky lg:top-24">
