@@ -1,6 +1,6 @@
 # Sonata
 
-Sonata is a browser-based audio player and mixer for synchronizing multiple sound files with lyrics. Load up to five local audio tracks and one lyrics file, then play them together while viewing the lyrics in sync.
+Sonata is a browser-based audio player and mixer for synchronizing multiple sound files with lyrics. Load up to five local audio tracks and one lyrics file, then play them together while viewing the lyrics in sync. Live [demo](https://sonata-9xm3.onrender.com/).
 
 ## Features
 
