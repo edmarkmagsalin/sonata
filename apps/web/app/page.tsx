@@ -105,6 +105,7 @@ export default function Page() {
     setCurrentTime,
     setDuration,
     addAudioFiles,
+    renameTrack,
     toggleMute,
     toggleSolo,
     removeTrack,
@@ -578,7 +579,14 @@ export default function Page() {
                           <div className="absolute top-10 right-0 z-10 min-w-36 rounded-lg border border-border bg-background p-1 shadow-lg">
                             <button
                               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-muted"
-                              onClick={() => setOpenTrackMenu(null)}
+                              onClick={() => {
+                                setOpenTrackMenu(null)
+                                const name = window.prompt(
+                                  "Rename track",
+                                  track.name
+                                )?.trim()
+                                if (name) renameTrack(track.id, name)
+                              }}
                             >
                               <Pencil className="size-3.5" />
                               Rename track

@@ -31,6 +31,7 @@ interface SonataStore {
 
   // Audio Track Actions (Max 3 on Free Tier)
   addAudioFiles: (files: File[]) => void
+  renameTrack: (id: string, name: string) => void
   removeTrack: (id: string) => void
   removeAllTracks: () => void
   toggleMute: (id: string) => void
@@ -84,6 +85,13 @@ export const useSonataStore = create<SonataStore>((set, get) => ({
   removeTrack: (id) =>
     set((state) => ({
       tracks: state.tracks.filter((t) => t.id !== id),
+    })),
+
+  renameTrack: (id, name) =>
+    set((state) => ({
+      tracks: state.tracks.map((track) =>
+        track.id === id ? { ...track, name } : track
+      ),
     })),
 
   removeAllTracks: () => set({ tracks: [] }),
