@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { isSupportedAudioFile } from './audio-files'
 
 export interface Track {
   id: string
@@ -63,10 +64,7 @@ export const useSonataStore = create<SonataStore>((set, get) => ({
   // Dedicated Audio Ingestion (Filters for WAV, MP3, M4A & Enforces Free Limit)
   addAudioFiles: (newFiles) => {
     const currentTracks = get().tracks
-    const validAudio = newFiles.filter((file) => {
-      const ext = file.name.split('.').pop()?.toLowerCase()
-      return ['wav', 'mp3', 'm4a'].includes(ext || '')
-    })
+    const validAudio = newFiles.filter(isSupportedAudioFile)
 
     const availableSlots = MAX_FREE_TRACKS - currentTracks.length
     const filesToAdd = validAudio.slice(0, availableSlots)

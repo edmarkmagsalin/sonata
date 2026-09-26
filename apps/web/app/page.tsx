@@ -25,12 +25,14 @@ import {
   Trash2,
   Volume2,
   Upload,
+  FileText
 } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import sonataLogo from "./logo.svg"
 
 import { useSonataStore } from "../lib/store"
+import { prepareAudioFiles } from "../lib/audio-files"
 
 const defaultLyricMetadata = {
   title: "Untitled",
@@ -390,39 +392,51 @@ export default function Page() {
     return () => document.removeEventListener("pointerdown", handlePointerDown)
   }, [openTrackMenu, openLyricMenu])
 
-  const handleAudioUpload = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleAudioUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
 
-    if (files.length > 0) addAudioFiles(files)
+    if (files.length > 0) {
+      try {
+        addAudioFiles(await prepareAudioFiles(files))
+      } catch {
+        window.alert("Unable to read the selected ZIP file.")
+      }
+    }
 
     event.target.value = ""
   }
 
-  const handleAudioDragEnter = (event: DragEvent<HTMLDivElement>) => {
+  const handleAudioDragEnter = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     audioDragDepthRef.current += 1
     setIsDraggingAudio(true)
   }
 
-  const handleAudioDragOver = (event: DragEvent<HTMLDivElement>) => {
+  const handleAudioDragOver = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = "copy"
   }
 
-  const handleAudioDragLeave = (event: DragEvent<HTMLDivElement>) => {
+  const handleAudioDragLeave = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     audioDragDepthRef.current -= 1
 
     if (audioDragDepthRef.current === 0) setIsDraggingAudio(false)
   }
 
-  const handleAudioDrop = (event: DragEvent<HTMLDivElement>) => {
+  const handleAudioDrop = async (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     audioDragDepthRef.current = 0
     setIsDraggingAudio(false)
 
     const files = Array.from(event.dataTransfer.files)
-    if (files.length > 0) addAudioFiles(files)
+    if (files.length > 0) {
+      try {
+        addAudioFiles(await prepareAudioFiles(files))
+      } catch {
+        window.alert("Unable to read the dropped ZIP file.")
+      }
+    }
   }
 
   const uploadLyricFile = async (file: File | undefined) => {
@@ -437,25 +451,25 @@ export default function Page() {
     event.target.value = ""
   }
 
-  const handleLyricsDragEnter = (event: DragEvent<HTMLElement>) => {
+  const handleLyricsDragEnter = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     lyricDragDepthRef.current += 1
     setIsDraggingLyrics(true)
   }
 
-  const handleLyricsDragOver = (event: DragEvent<HTMLElement>) => {
+  const handleLyricsDragOver = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = "copy"
   }
 
-  const handleLyricsDragLeave = (event: DragEvent<HTMLElement>) => {
+  const handleLyricsDragLeave = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     lyricDragDepthRef.current -= 1
 
     if (lyricDragDepthRef.current === 0) setIsDraggingLyrics(false)
   }
 
-  const handleLyricsDrop = async (event: DragEvent<HTMLElement>) => {
+  const handleLyricsDrop = async (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     lyricDragDepthRef.current = 0
     setIsDraggingLyrics(false)
@@ -522,13 +536,7 @@ export default function Page() {
 
       <div className="mx-auto grid max-w-370 grid-cols-1 gap-0 pt-16 lg:grid-cols-[360px_1fr]">
         <aside className="order-last border-b border-border p-5 sm:p-6 lg:order-0 lg:sticky lg:top-16 lg:flex lg:h-[calc(100vh-9rem)] lg:flex-col lg:overflow-hidden lg:border-r lg:border-b-0">
-          <div
-            className={`lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1 scrollbar-track-transparent hover:scrollbar-thumb-white/5 ${isDraggingAudio ? "rounded-xl bg-primary/5 ring-1 ring-primary" : ""}`}
-            onDragEnter={handleAudioDragEnter}
-            onDragOver={handleAudioDragOver}
-            onDragLeave={handleAudioDragLeave}
-            onDrop={handleAudioDrop}
-          >
+          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1 scrollbar-track-transparent hover:scrollbar-thumb-white/5">
             {tracks.length > 0 ? (
               <div className="space-y-3 p-4">
                 {tracks.map((track) => (
@@ -626,7 +634,7 @@ export default function Page() {
               </div>
             ) : (
               <div className="flex min-h-full flex-col items-center justify-center px-6 py-16 text-center">
-                <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-dashed border-border bg-muted text-muted-foreground">
+                <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
                   <FileAudio className="size-6" />
                 </div>
                 <h2 className="text-sm font-semibold">No tracks uploaded</h2>
@@ -638,8 +646,12 @@ export default function Page() {
           </div>
           <div className="mt-3 flex shrink-0 gap-2">
             <button
-              className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-foreground"
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-foreground ${isDraggingAudio ? "border-primary bg-primary/5 ring-1 ring-primary" : ""}`}
               onClick={() => audioInputRef.current?.click()}
+              onDragEnter={handleAudioDragEnter}
+              onDragOver={handleAudioDragOver}
+              onDragLeave={handleAudioDragLeave}
+              onDrop={handleAudioDrop}
             >
               <Plus className="size-4" /> Add track
             </button>
@@ -657,7 +669,7 @@ export default function Page() {
             ref={audioInputRef}
             className="sr-only"
             type="file"
-            accept=".wav,.mp3,.m4a"
+            accept=".wav,.mp3,.m4a,.ogg,.flac,.zip"
             multiple
             onChange={handleAudioUpload}
           />
@@ -680,13 +692,7 @@ export default function Page() {
           )}
         </aside>
 
-        <section
-          className={`order-first min-w-0 px-5 py-5 sm:px-8 sm:py-7 lg:order-0 ${isDraggingLyrics ? "bg-primary/5" : ""}`}
-          onDragEnter={handleLyricsDragEnter}
-          onDragOver={handleLyricsDragOver}
-          onDragLeave={handleLyricsDragLeave}
-          onDrop={handleLyricsDrop}
-        >
+        <section className="order-first min-w-0 px-5 py-5 sm:px-8 sm:py-7 lg:order-0">
           <div className="mx-auto max-w-2xl">
             {lyricFile ? (
               <div className="relative overflow-hidden rounded-2xl border border-border bg-card px-5 py-5 sm:px-8 sm:py-7 lg:sticky lg:top-24">
@@ -775,7 +781,7 @@ export default function Page() {
               <div className="relative flex min-h-80 flex-col items-center justify-center overflow-hidden rounded-2xl border border-border bg-card px-5 py-8 text-center sm:px-8 lg:sticky lg:top-24">
                 <div className="absolute top-0 left-0 h-1 w-full bg-muted" />
                 <div className="mb-5 flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-                  <FileAudio className="size-7" />
+                  <FileText className="size-7" />
                 </div>
                 <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
                   Lyrics
@@ -787,9 +793,14 @@ export default function Page() {
                   Add an LRC file to display synchronized lyrics with your tracks.
                 </p>
                 <Button
-                  className="mt-6"
+                  className={`mt-4 flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-foreground ${isDraggingLyrics ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-primary/5"}`}
+                  
                   size="sm"
                   onClick={() => lyricsInputRef.current?.click()}
+                  onDragEnter={handleLyricsDragEnter}
+                  onDragOver={handleLyricsDragOver}
+                  onDragLeave={handleLyricsDragLeave}
+                  onDrop={handleLyricsDrop}
                 >
                   <Upload /> Upload lyrics
                 </Button>
