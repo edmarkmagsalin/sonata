@@ -591,13 +591,6 @@ export default function Page() {
                               <Pencil className="size-3.5" />
                               Rename track
                             </button>
-                            <button
-                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium hover:bg-muted"
-                              onClick={() => setOpenTrackMenu(null)}
-                            >
-                              <RefreshCw className="size-3.5" />
-                              Replace track
-                            </button>
                             <div className="my-1 border-t border-border" />
                             <button
                               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-medium text-destructive hover:bg-destructive/10"
@@ -812,19 +805,19 @@ export default function Page() {
                 >
                   <Upload /> Upload lyrics
                 </Button>
-                <input
-                  id="lyrics-upload"
-                  ref={lyricsInputRef}
-                  className="sr-only"
-                  type="file"
-                  accept=".lrc,text/plain"
-                  onChange={handleLyricsUpload}
-                />
                 <p className="mt-3 text-[11px] text-muted-foreground">
                   Supported format: .txt and .lrc
                 </p>
               </div>
             )}
+            <input
+              id="lyrics-upload"
+              ref={lyricsInputRef}
+              className="sr-only"
+              type="file"
+              accept=".lrc,text/plain"
+              onChange={handleLyricsUpload}
+            />
           </div>
         </section>
       </div>
