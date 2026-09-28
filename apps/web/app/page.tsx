@@ -122,6 +122,7 @@ export default function Page() {
     renameTrack,
     toggleMute,
     toggleSolo,
+    setTrackVolume,
     removeTrack,
     removeAllTracks,
     setLyricFile,
@@ -853,14 +854,24 @@ export default function Page() {
                       >
                         SOLO
                       </button>
-                      <div className="ml-auto flex items-center gap-2 text-muted-foreground">
-                        <Volume2 className="size-3.5" />
-                        <div className="h-1 w-16 rounded-full bg-muted">
-                          <div
-                            className={`h-1 rounded-full bg-primary ${track.volume > 0.5 ? "w-4/5" : "w-1/2"}`}
-                          />
-                        </div>
-                      </div>
+                      <label className="ml-auto flex items-center gap-2 text-muted-foreground">
+                        <Volume2 className="size-3.5" aria-hidden="true" />
+                        <input
+                          className="w-16 accent-primary"
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={track.volume}
+                          aria-label={`Volume for ${track.name}`}
+                          onChange={(event) =>
+                            setTrackVolume(track.id, Number(event.currentTarget.value))
+                          }
+                        />
+                        <output className="w-8 text-right text-[10px] tabular-nums">
+                          {Math.round(track.volume * 100)}%
+                        </output>
+                      </label>
                     </div>
                   </div>
                 ))}
