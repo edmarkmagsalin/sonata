@@ -11,6 +11,7 @@ import Image from "next/image"
 import {
   Info,
   FileAudio,
+  FolderOpen,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -20,12 +21,14 @@ import {
   Repeat,
   RepeatOff,
   RotateCcw,
+  Save,
   SkipBack,
   SkipForward,
   Trash2,
   Volume2,
   Upload,
-  FileText
+  FileText,
+  Download,
 } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
@@ -33,6 +36,16 @@ import sonataLogo from "./logo.svg"
 
 import { useSonataStore } from "../lib/store"
 import { prepareAudioFiles } from "../lib/audio-files"
+import {
+  deleteSavedSession,
+  exportSessionBundle,
+  importSessionBundle,
+  listSavedSessions,
+  loadSavedSession,
+  saveSession,
+  type SavedSessionSummary,
+  type SessionSnapshot,
+} from "../lib/sessions"
 
 const defaultLyricMetadata = {
   title: "Untitled",
@@ -104,6 +117,7 @@ export default function Page() {
     setIsPlaying,
     setCurrentTime,
     setDuration,
+    replaceSession,
     addAudioFiles,
     renameTrack,
     toggleMute,
@@ -117,6 +131,9 @@ export default function Page() {
   const [visualizerBars, setVisualizerBars] = useState(createFlatVisualizerBars)
   const [openTrackMenu, setOpenTrackMenu] = useState<string | null>(null)
   const [openLyricMenu, setOpenLyricMenu] = useState(false)
+  const [sessionsOpen, setSessionsOpen] = useState(false)
+  const [savedSessions, setSavedSessions] = useState<SavedSessionSummary[]>([])
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null)
   const [isDraggingAudio, setIsDraggingAudio] = useState(false)
   const [isDraggingLyrics, setIsDraggingLyrics] = useState(false)
   const lyricsInputRef = useRef<HTMLInputElement>(null)
@@ -135,6 +152,8 @@ export default function Page() {
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const trackMenuRef = useRef<HTMLDivElement>(null)
   const lyricMenuRef = useRef<HTMLDivElement>(null)
+  const sessionMenuRef = useRef<HTMLDivElement>(null)
+  const sessionImportInputRef = useRef<HTMLInputElement>(null)
   const { metadata: lyricMetadata, lines: lyrics } = parseLyrics(lyricContent)
   const progress = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0
   const trackIds = tracks.map((track) => track.id).join("|")
@@ -143,6 +162,12 @@ export default function Page() {
       line.timestamp <= currentTime ? index : activeIndex,
     -1
   )
+
+  useEffect(() => {
+    void listSavedSessions()
+      .then(setSavedSessions)
+      .catch(() => setSessionStatus("Browser storage is unavailable."))
+  }, [])
 
   useEffect(() => {
     currentTimeRef.current = currentTime
@@ -393,6 +418,106 @@ export default function Page() {
     return () => document.removeEventListener("pointerdown", handlePointerDown)
   }, [openTrackMenu, openLyricMenu])
 
+  useEffect(() => {
+    if (!sessionsOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!sessionMenuRef.current?.contains(event.target as Node)) {
+        setSessionsOpen(false)
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    return () => document.removeEventListener("pointerdown", handlePointerDown)
+  }, [sessionsOpen])
+
+  const getCurrentSession = (): SessionSnapshot => ({
+    tracks,
+    currentTime,
+    masterVolume,
+    repeating,
+    lyricFile,
+    lyricContent,
+  })
+
+  const refreshSavedSessions = async () => {
+    setSavedSessions(await listSavedSessions())
+  }
+
+  const downloadSession = async (name: string, snapshot: SessionSnapshot) => {
+    const blob = await exportSessionBundle(name, snapshot)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    const fileName = name.replace(/[\\/:*?"<>|]/g, "_").trim() || "session"
+    link.href = url
+    link.download = `${fileName}.sonata`
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const handleSaveSession = async () => {
+    const name = window.prompt("Name this session", "Untitled session")?.trim()
+    if (!name) return
+
+    try {
+      await saveSession(name, getCurrentSession())
+      await refreshSavedSessions()
+      setSessionStatus("Session saved in this browser.")
+    } catch {
+      setSessionStatus("Unable to save. Browser storage may be full.")
+    }
+  }
+
+  const handleLoadSession = async (id: string) => {
+    try {
+      const session = await loadSavedSession(id)
+      currentTimeRef.current = session.snapshot.currentTime
+      setIsPlaying(false)
+      replaceSession(session.snapshot)
+      setRepeating(session.snapshot.repeating)
+      setSessionsOpen(false)
+      setSessionStatus(`Loaded ${session.name}.`)
+    } catch {
+      setSessionStatus("Unable to load that saved session.")
+    }
+  }
+
+  const handleExportSavedSession = async (id: string) => {
+    try {
+      const session = await loadSavedSession(id)
+      await downloadSession(session.name, session.snapshot)
+      setSessionStatus(`Exported ${session.name}.`)
+    } catch {
+      setSessionStatus("Unable to export that saved session.")
+    }
+  }
+
+  const handleDeleteSavedSession = async (id: string) => {
+    try {
+      await deleteSavedSession(id)
+      await refreshSavedSessions()
+      setSessionStatus("Saved session deleted.")
+    } catch {
+      setSessionStatus("Unable to delete that saved session.")
+    }
+  }
+
+  const handleImportSession = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+
+    try {
+      const imported = await importSessionBundle(file)
+      const saved = await saveSession(imported.name, imported.snapshot)
+      await refreshSavedSessions()
+      await handleLoadSession(saved.id)
+      setSessionStatus(`Imported ${imported.name}.`)
+    } catch {
+      setSessionStatus("Unable to import this session file.")
+    }
+  }
+
   const handleAudioUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
 
@@ -529,6 +654,113 @@ export default function Page() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <div ref={sessionMenuRef} className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-expanded={sessionsOpen}
+              onClick={() => setSessionsOpen((open) => !open)}
+            >
+              <FolderOpen />
+              Sessions
+            </Button>
+            {sessionsOpen && (
+              <div className="absolute top-10 right-0 z-[60] w-[min(22rem,calc(100vw-2.5rem))] overflow-hidden rounded-lg border border-border bg-background shadow-xl">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <div>
+                    <h2 className="text-sm font-semibold">Saved sessions</h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Stored in this browser
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSaveSession()}
+                    disabled={tracks.length === 0}
+                  >
+                    <Save /> Save current
+                  </Button>
+                </div>
+                <div className="flex gap-2 border-b border-border p-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    disabled={tracks.length === 0}
+                    onClick={() =>
+                      void downloadSession("Sonata session", getCurrentSession())
+                        .then(() => setSessionStatus("Session exported."))
+                        .catch(() => setSessionStatus("Unable to export this session."))
+                    }
+                  >
+                    <Download /> Export current
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => sessionImportInputRef.current?.click()}
+                  >
+                    <Upload /> Import
+                  </Button>
+                  <input
+                    ref={sessionImportInputRef}
+                    className="sr-only"
+                    type="file"
+                    accept=".sonata,application/zip"
+                    onChange={handleImportSession}
+                  />
+                </div>
+                {sessionStatus && (
+                  <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground" role="status">
+                    {sessionStatus}
+                  </p>
+                )}
+                <ul className="max-h-72 overflow-y-auto p-2">
+                  {savedSessions.length > 0 ? savedSessions.map((session) => (
+                    <li
+                      key={session.id}
+                      className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted/60"
+                    >
+                      <button
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => void handleLoadSession(session.id)}
+                      >
+                        <span className="block truncate text-sm font-medium">
+                          {session.name}
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {new Date(session.updatedAt).toLocaleString()}
+                        </span>
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Export ${session.name}`}
+                        title={`Export ${session.name}`}
+                        onClick={() => void handleExportSavedSession(session.id)}
+                      >
+                        <Download />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Delete ${session.name}`}
+                        title={`Delete ${session.name}`}
+                        onClick={() => void handleDeleteSavedSession(session.id)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </li>
+                  )) : (
+                    <li className="px-2 py-5 text-center text-xs text-muted-foreground">
+                      No saved sessions yet
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
           <Button variant="ghost" aria-label="Open Info">
             <Info />
           </Button>
