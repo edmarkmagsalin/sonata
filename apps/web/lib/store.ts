@@ -28,6 +28,13 @@ interface SonataStore {
   setCurrentTime: (time: number) => void
   setDuration: (duration: number) => void
   setMasterVolume: (volume: number) => void
+  replaceSession: (session: {
+    tracks: Track[]
+    currentTime: number
+    masterVolume: number
+    lyricFile: File | null
+    lyricContent: string | null
+  }) => void
 
   // Audio Track Actions (Max 3 on Free Tier)
   addAudioFiles: (files: File[]) => void
@@ -61,6 +68,16 @@ export const useSonataStore = create<SonataStore>((set, get) => ({
   setCurrentTime: (currentTime) => set({ currentTime }),
   setDuration: (duration) => set({ duration }),
   setMasterVolume: (masterVolume) => set({ masterVolume }),
+  replaceSession: (session) =>
+    set({
+      isPlaying: false,
+      currentTime: session.currentTime,
+      duration: 0,
+      masterVolume: session.masterVolume,
+      tracks: session.tracks,
+      lyricFile: session.lyricFile,
+      lyricContent: session.lyricContent,
+    }),
 
   // Dedicated Audio Ingestion (Filters for WAV, MP3, M4A & Enforces Free Limit)
   addAudioFiles: (newFiles) => {
