@@ -682,7 +682,7 @@ export default function Page() {
               Sessions
             </Button>
             {sessionsOpen && (
-              <div className="absolute top-10 right-0 z-[60] w-[min(22rem,calc(100vw-2.5rem))] overflow-hidden rounded-lg border border-border bg-background shadow-xl">
+              <div className="absolute top-10 right-0 z-60 w-[min(22rem,calc(100vw-2.5rem))] overflow-hidden rounded-lg border border-border bg-background shadow-xl">
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <div>
                     <h2 className="text-sm font-semibold">Saved sessions</h2>
