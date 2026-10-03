@@ -137,8 +137,10 @@ export default function Page() {
   const [sessionStatus, setSessionStatus] = useState<string | null>(null)
   const [isDraggingAudio, setIsDraggingAudio] = useState(false)
   const [isDraggingLyrics, setIsDraggingLyrics] = useState(false)
+  const [trackUploadStatus, setTrackUploadStatus] = useState<string | null>(null)
   const lyricsInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
+  const isPreparingTracksRef = useRef(false)
   const audioDragDepthRef = useRef(0)
   const lyricDragDepthRef = useRef(0)
   const audioElementsRef = useRef(new Map<string, HTMLAudioElement>())
@@ -519,17 +521,37 @@ export default function Page() {
     }
   }
 
+  const prepareAndAddTracks = async (
+    files: File[],
+    source: "selected" | "dropped"
+  ) => {
+    if (files.length === 0 || isPreparingTracksRef.current) return
+
+    isPreparingTracksRef.current = true
+    setTrackUploadStatus(
+      files.some((file) => file.name.toLowerCase().endsWith(".zip"))
+        ? "Extracting ZIP and adding tracks..."
+        : "Adding tracks..."
+    )
+
+    try {
+      addAudioFiles(await prepareAudioFiles(files))
+    } catch {
+      window.alert(
+        source === "selected"
+          ? "Unable to read the selected ZIP file."
+          : "Unable to read the dropped ZIP file."
+      )
+    } finally {
+      isPreparingTracksRef.current = false
+      setTrackUploadStatus(null)
+    }
+  }
+
   const handleAudioUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
 
-    if (files.length > 0) {
-      try {
-        addAudioFiles(await prepareAudioFiles(files))
-      } catch {
-        window.alert("Unable to read the selected ZIP file.")
-      }
-    }
-
+    await prepareAndAddTracks(files, "selected")
     event.target.value = ""
   }
 
@@ -557,13 +579,7 @@ export default function Page() {
     setIsDraggingAudio(false)
 
     const files = Array.from(event.dataTransfer.files)
-    if (files.length > 0) {
-      try {
-        addAudioFiles(await prepareAudioFiles(files))
-      } catch {
-        window.alert("Unable to read the dropped ZIP file.")
-      }
-    }
+    await prepareAndAddTracks(files, "dropped")
   }
 
   const uploadLyricFile = async (file: File | undefined) => {
@@ -769,7 +785,10 @@ export default function Page() {
       </header>
 
       <div className="mx-auto grid max-w-370 grid-cols-1 gap-0 pt-16 lg:grid-cols-[360px_1fr]">
-        <aside className="order-last border-b border-border p-5 sm:p-6 lg:order-0 lg:sticky lg:top-16 lg:flex lg:h-[calc(100vh-9rem)] lg:flex-col lg:overflow-hidden lg:border-r lg:border-b-0">
+        <aside
+          className="relative order-last border-b border-border p-5 sm:p-6 lg:order-0 lg:sticky lg:top-16 lg:flex lg:h-[calc(100vh-9rem)] lg:flex-col lg:overflow-hidden lg:border-r lg:border-b-0"
+          aria-busy={Boolean(trackUploadStatus)}
+        >
           <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1 scrollbar-track-transparent hover:scrollbar-thumb-white/5">
             {tracks.length > 0 ? (
               <div className="space-y-3 p-4">
@@ -888,14 +907,30 @@ export default function Page() {
               </div>
             )}
           </div>
+          {trackUploadStatus && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm">
+              <div
+                className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-4 shadow-lg"
+                role="status"
+                aria-live="polite"
+              >
+                <RefreshCw
+                  className="size-5 shrink-0 animate-spin text-primary"
+                  aria-hidden="true"
+                />
+                <span className="text-sm font-medium">{trackUploadStatus}</span>
+              </div>
+            </div>
+          )}
           <div className="mt-3 flex shrink-0 gap-2">
             <button
-              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-foreground ${isDraggingAudio ? "border-primary bg-primary/5 ring-1 ring-primary" : ""}`}
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-xs font-medium text-muted-foreground hover:border-foreground disabled:pointer-events-none disabled:opacity-50 ${isDraggingAudio ? "border-primary bg-primary/5 ring-1 ring-primary" : ""}`}
               onClick={() => audioInputRef.current?.click()}
               onDragEnter={handleAudioDragEnter}
               onDragOver={handleAudioDragOver}
               onDragLeave={handleAudioDragLeave}
               onDrop={handleAudioDrop}
+              disabled={Boolean(trackUploadStatus)}
             >
               <Plus className="size-4" /> Add track
             </button>
