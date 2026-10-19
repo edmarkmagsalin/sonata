@@ -53,6 +53,8 @@ const defaultLyricMetadata = {
   album: "Unknown album",
 }
 
+const appVersion = "v1.0"
+
 const createFlatVisualizerBars = () => Array.from({ length: 60 }, () => 18)
 
 const formatTime = (seconds: number) => {
@@ -133,6 +135,7 @@ export default function Page() {
   const [openTrackMenu, setOpenTrackMenu] = useState<string | null>(null)
   const [openLyricMenu, setOpenLyricMenu] = useState(false)
   const [sessionsOpen, setSessionsOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [savedSessions, setSavedSessions] = useState<SavedSessionSummary[]>([])
   const [sessionStatus, setSessionStatus] = useState<string | null>(null)
   const [isDraggingAudio, setIsDraggingAudio] = useState(false)
@@ -156,6 +159,7 @@ export default function Page() {
   const trackMenuRef = useRef<HTMLDivElement>(null)
   const lyricMenuRef = useRef<HTMLDivElement>(null)
   const sessionMenuRef = useRef<HTMLDivElement>(null)
+  const aboutDialogRef = useRef<HTMLDialogElement>(null)
   const sessionImportInputRef = useRef<HTMLInputElement>(null)
   const { metadata: lyricMetadata, lines: lyrics } = parseLyrics(lyricContent)
   const trackIds = tracks.map((track) => track.id).join("|")
@@ -174,6 +178,14 @@ export default function Page() {
   useEffect(() => {
     currentTimeRef.current = currentTime
   }, [currentTime])
+
+  useEffect(() => {
+    const dialog = aboutDialogRef.current
+    if (!dialog) return
+
+    if (aboutOpen && !dialog.open) dialog.showModal()
+    if (!aboutOpen && dialog.open) dialog.close()
+  }, [aboutOpen])
 
   useEffect(() => {
     repeatingRef.current = repeating
@@ -667,7 +679,7 @@ export default function Page() {
             />
           </div>
           <span className="text-md font-semibold tracking-[0.18em] uppercase">
-            Sonata<sup className="text-xs text-muted-foreground">beta</sup>
+            Sonata
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -778,11 +790,56 @@ export default function Page() {
               </div>
             )}
           </div>
-          <Button variant="ghost" aria-label="Open Info">
+          <Button
+            variant="ghost"
+            aria-label="About Sonata"
+            title="About Sonata"
+            onClick={() => setAboutOpen(true)}
+          >
             <Info />
           </Button>
         </div>
       </header>
+
+      <dialog
+        ref={aboutDialogRef}
+        aria-labelledby="about-title"
+        aria-describedby="about-description"
+        className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-border bg-background p-0 text-foreground shadow-2xl backdrop:bg-black/50"
+        onCancel={() => setAboutOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setAboutOpen(false)
+        }}
+        onClose={() => setAboutOpen(false)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setAboutOpen(false)
+        }}
+      >
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 id="about-title" className="text-lg font-semibold uppercase">
+            Sonata
+          </h2>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close About dialog"
+            onClick={() => setAboutOpen(false)}
+          >
+            <span aria-hidden="true">&times;</span>
+          </Button>
+        </div>
+        <div className="space-y-3 px-5 py-4">
+          <p className="text-sm text-muted-foreground">
+            {appVersion}
+          </p>
+          <p id="about-description" className="text-sm leading-relaxed">
+            Sonata is a browser-based audio player and mixer for synchronizing
+            multiple sound files with lyrics. Load up to five local audio tracks
+            and one lyrics file, then play them together while viewing the lyrics
+            in sync.
+          </p>
+        </div>
+      </dialog>
 
       <div className="mx-auto grid max-w-370 grid-cols-1 gap-0 pt-16 lg:grid-cols-[360px_1fr]">
         <aside
