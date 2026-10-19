@@ -149,7 +149,7 @@ export default function Page() {
   const sourceNodesRef = useRef(new Map<string, MediaElementAudioSourceNode>())
   const gainNodesRef = useRef(new Map<string, GainNode>())
   const visualizerFrameRef = useRef<number | null>(null)
-  const activeLyricRef = useRef<HTMLDivElement | null>(null)
+  const activeLyricRef = useRef<HTMLButtonElement | null>(null)
   const repeatingRef = useRef(repeating)
   const currentTimeRef = useRef(currentTime)
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -158,7 +158,6 @@ export default function Page() {
   const sessionMenuRef = useRef<HTMLDivElement>(null)
   const sessionImportInputRef = useRef<HTMLInputElement>(null)
   const { metadata: lyricMetadata, lines: lyrics } = parseLyrics(lyricContent)
-  const progress = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0
   const trackIds = tracks.map((track) => track.id).join("|")
   const activeLyricIndex = lyrics.reduce(
     (activeIndex, line, index) =>
@@ -625,11 +624,8 @@ export default function Page() {
     await uploadLyricFile(lyricFile)
   }
 
-  const handleSkip = (seconds: number) => {
-    const nextTime = Math.min(
-      Math.max(currentTimeRef.current + seconds, 0),
-      duration
-    )
+  const handleSeek = (time: number) => {
+    const nextTime = Math.min(Math.max(time, 0), duration)
 
     currentTimeRef.current = nextTime
     setCurrentTime(nextTime)
@@ -637,6 +633,10 @@ export default function Page() {
     for (const audio of audioElementsRef.current.values()) {
       audio.currentTime = nextTime
     }
+  }
+
+  const handleSkip = (seconds: number) => {
+    handleSeek(currentTimeRef.current + seconds)
   }
 
   const handlePlayFromStart = () => {
@@ -1036,22 +1036,27 @@ export default function Page() {
                     const isActive = index === activeLyricIndex
 
                     return (
-                    <div
+                    <button
+                      type="button"
                       key={`${line.timestamp}-${index}`}
                       ref={isActive ? activeLyricRef : undefined}
-                      className={`grid grid-cols-[42px_1fr] gap-4 transition-opacity ${isActive ? "opacity-100" : "opacity-35"}`}
+                      className={`grid w-full grid-cols-[42px_1fr] gap-4 rounded-md text-left transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isActive ? "opacity-100" : "opacity-35 hover:opacity-100"}`}
+                      aria-label={`Seek to ${line.time}: ${line.text}`}
+                      title={`Seek to ${line.time}`}
+                      disabled={tracks.length === 0 || duration <= 0}
+                      onClick={() => handleSeek(line.timestamp)}
                     >
                       <span
                         className={`pt-1 font-mono text-[11px] ${isActive ? "text-primary" : "text-muted-foreground"}`}
                       >
                         {line.time}
                       </span>
-                      <p
-                        className={`${isActive ? "text-xl font-medium sm:text-2xl" : "text-base"}`}
+                      <span
+                        className={`block ${isActive ? "text-xl font-medium sm:text-2xl" : "text-base"}`}
                       >
                         {line.text}
-                      </p>
-                    </div>
+                      </span>
+                    </button>
                     )
                   })}
                 </div>
@@ -1156,12 +1161,18 @@ export default function Page() {
             <span className="font-mono text-[11px] text-muted-foreground">
               {formatTime(currentTime)}
             </span>
-            <div className="h-1 flex-1 rounded-full bg-muted">
-              <div
-                className="h-1 rounded-full bg-primary"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+            <input
+              className="h-1 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed"
+              type="range"
+              min="0"
+              max={duration}
+              step="0.1"
+              value={Math.min(currentTime, duration)}
+              aria-label="Seek playback"
+              aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
+              disabled={tracks.length === 0 || duration <= 0}
+              onChange={(event) => handleSeek(Number(event.currentTarget.value))}
+            />
             <span className="font-mono text-[11px] text-muted-foreground">
               {formatTime(duration)}
             </span>
