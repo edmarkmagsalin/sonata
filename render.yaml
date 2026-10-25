@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: sonata-frontend
+    runtime: static
+    buildCommand: corepack pnpm install --frozen-lockfile && corepack pnpm --filter web build
+    staticPublishPath: apps/web/out

@@ -41,6 +41,16 @@ pnpm typecheck
 pnpm build
 ```
 
+## Deploy on Render
+
+This repository includes a Render Blueprint for deploying the frontend as a
+static site. In Render, create a new Blueprint and connect this repository.
+Render will install the pnpm workspace from the repository root, build
+`apps/web` as a static export, and publish `apps/web/out`.
+
+The frontend runs independently in the browser and does not require a backend
+or a running Node.js server.
+
 ## Project structure
 
 - `apps/web` contains the Sonata Next.js application.
